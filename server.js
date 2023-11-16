@@ -131,7 +131,7 @@ app.post('/createaccount', async(req, res) => {
   
   app.get('/', async (req, res) => {
 	 //check if login
-	if (!req.session.loggedIn) {
+	if (req.session.loggedIn==nnull) {
 	res.redirect('/login');} ;
 	
     try {
