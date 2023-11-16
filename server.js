@@ -139,7 +139,7 @@ app.post('/createaccount', async(req, res) => {
 
   app.get('/', async (req, res) => {
 	 //check if login
-	if (!req.session.loggedIn) {
+	if (!req.session.id) {
 	res.redirect('/login');} ;
 	
     try {
