@@ -15,8 +15,8 @@
 } */ //mongodb method(cnDB)//const kittySchema = require('./models/kitty');//schema requirement
 //
 //names
-const collectionName_user = 'users';  //login/create
-const uri = `mongodb+srv://userfornode:12345678900@book-managementsystem.cqntnli.mongodb.net/BookManage`;
+const collectionName_user = 'user';  //login/create
+const uri = `mongodb+srv://billydeng97:dhy97886886@cluster0.zsgzyzj.mongodb.net/381Project?retryWrites=true&w=majority`;
 //names
 
 //quotes
@@ -31,62 +31,92 @@ const bodyParser=require('body-parser');
 
 //shortcuts
 const closeDB=()=>mongoose.disconnect();	
-mongoose.connect(uri);	
+const openDB=()=>mongoose.connect(uri);	
 const db=mongoose.connection;
 //shortcuts
+
 app.use(session({
-    userid: "session",  
-    keys: ["123"],
-}))
-
-//bookSchema
- const bookSchema = new mongoose.Schema({
-    title: String,
-    author: String,
-    year: Number
-});
-const Book = mongoose.model('books', bookSchema);
-
+  name: 'session',
+  keys: ['aaa','bbb'],
+}));//checked
 //functions
-   const handle_login = async (username, password) => {
+const matchNamePW = async (db,usn,psw) => {
+   try {let result = await db.collection(collectionName_user).findOne({ "username":`${usn}`,"password":`${psw}`});
+      return result !== null; }
+   catch (err) {
+      console.error('SomethingWrong', err);
+      return false;}}
+      
+const matchUserName = async (db,usn) => {
+   try {let result = await db.collection(collectionName_user).findOne({ "username":`${usn}`});
+      return result !== null; }
+   catch (err) {
+      console.error('SomethingWrong', err);
+      return false;}}     
+      
+
+
+const createAcc=async (db,nusn,npsw)=>{
+	
+	try{
+	let result=await db.collection(collectionName_user).insertOne({"username":`${nusn}`,"password":`${npsw}`});
+	return result !== 1;}
+	
+	catch (err) {
+	      console.error('SomethingWrong', err);
+	      return false;}}
+   
+ 
+   const handle_login = async (req,username,password) => {
    try{ 
+   await openDB();
    console.log("Connected DB");
-   let result= await db.collection(collectionName_user).findOne({ "username": username,"password":password});
+   
+   let result=await matchNamePW(db,username,password);
    if(result){
-   console.log(result)
-   return result;
+   console.log("Wah 666");
+   
+   let unique=await db.collection(collectionName_user).findOne({"username":`${username}`});
+   let Id=unique._id.toString();
+   console.log(Id);
+   req.session.dbid=Id;
+   return null;
    }
    else{
-   return null;
+   return {Message:"Wrong Username or Password"};
    console.log("NOTCORRECT!!!")}
  
    
   }
    catch (err){
-   console.error("Error while handle login",err);
+   console.error("Ahhhhhh!",err);
    }
    finally{
+   await closeDB(); 
    console.log("Disconnected DB");}}
  //  
    const handle_accCreate = async (username, password) => {
    try{  
+   await openDB();
    console.log("Connected DB");
-	let match = await db.collection(collectionName_user).findOne({"username":username});
-	if(match){
+   
+	let match=await matchUserName(db,username);
+	if(match){let result=true;
 	console.log("Username used");
-	return true;
+	return {Message:"User Name Already Used"};
 	}
 	
 	else{
-   let result=await db.collection(collectionName_user).insertOne({"username":username,"password":password});
-   console.log(username + " Created");
-   return false;}}
+   let result=await createAcc(db,username,password);
+       console.log("Wah666 Created");
+       return null;}}
    
    
    catch (err){
-   console.error("Error while handle acccreate",err);
+   console.error("Ahhhhhh!",err);
    }
    finally{
+   await closeDB(); 
    console.log("Disconnected DB");}}
    
    
@@ -99,15 +129,21 @@ app.get('/login', (req, res) => {
   
 });
 app.post('/login', async(req,res) => {
-   const result=await handle_login(req.body.username,req.body.password);
-   if(result){
-   req.session.loggedIn = true;
-   req.session.authenticated = true;
-   req.session.userid = result._id.toString();
-   console.log("Logged as " + result.username);
-   res.redirect('/');
-	   }
-   else{res.status(200).render('login.ejs',{Message:"incorrect username or passwd"});}
+   const result=await handle_login(req,req.body.username,req.body.password);
+   if(result && result.Message){ res.status(200).render('login.ejs',{Message:result.Message});}
+   if(result==null){req.session.loggedIn = true;
+   res.redirect('/');}
+  
+});
+
+app.get('/', (req, res) => {
+  if (req.session.loggedIn && req.session.dbid) {
+    res.status(200).render('testmainpage.ejs', { Message: null });
+    console.log(req.session.dbid)
+  } else {
+    console.log("坏坏哦偷看人家~");
+    res.redirect('/login');
+  }
 });
 
 app.get('/createaccount', (req, res) => {
@@ -116,22 +152,11 @@ app.get('/createaccount', (req, res) => {
   
 app.post('/createaccount', async(req, res) => {
     const result=await handle_accCreate(req.body.username,req.body.password);
-    if(result){ res.status(200).render('createaccount.ejs',{Message:"User Name Already Used"});}
-	else{
-	res.status(200).render('login.ejs',{Message:"Successfully Create Account! Plz Login"});
-	}
+    if(result && result.Message){ res.status(200).render('createaccount.ejs',{Message:result.Message});}
   });
-  
-  app.get('/logout',(req,res)=>{
-  req.session.loggedIn = null;
-  res.redirect('/login');
-  })
-  
-  //books
-  
   app.get('/', async (req, res) => {
 	 //check if login
-	if (!req.session.loggedIn) {
+	if (!req.session.id) {
 	res.redirect('/login');} ;
 	
     try {
@@ -195,10 +220,7 @@ app.post('/books/delete/:id', async (req, res) => {
 		console.log('insert error or cannot connect db');
     }
 });
-  
-  
-//end
-app.listen(process.env.PORT || 3000);
+
+app.listen(process.env.PORT || 8099);
 
    
-
